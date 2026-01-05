@@ -1,83 +1,44 @@
 (function() {
-    // ==========================================
-    // 1. 配置区域
-    // ==========================================
-    // 在此处填入你的正式 Offer/落地页 链接
-    var config_bproducturl = "https://你的正式落地页链接.com"; 
+    // 【1. 配置：跳转目标地址】
+    var config_target = "https://你的正式落地页链接.com"; 
 
-    // ==========================================
-    // 2. 逻辑解析区域
-    // ==========================================
-    var query = getQueryStr(location.search) || {};
-    var pixel = query.pixel;
-    var apkch = query.apkch;
-    
-    var pwa_ch = apkch;
-    var pwa_pixel = pixel;
-    var pwa_compaign = query.campaign || '';
-    var pwa_adgroup = query.adgroup || '';
-    var pwa_creative = query.creative || '';
-    var pwa_fbclid = query.fbclid || '';
-    var pwa_funt = query.funtest || '';
+    function isRealUser() {
+        var url = window.location.search;
+        
+        // --- 校验 1：参数完整性 ---
+        // 真实点击除了 fbclid，通常还带有 pixel, campaign 等你配置的多个参数
+        // 手动加 ID 很难模拟完整的参数链
+        if (url.indexOf('fbclid=') === -1 || url.indexOf('pixel=') === -1) return false;
 
-    var pwa_jump = true;
+        // --- 校验 2：占位符过滤 (核心) ---
+        // 只要链接中还包含未填充的大括号，100% 不是真实点击
+        if (url.indexOf('%7B%7B') > -1 || url.indexOf('{{') > -1) return false;
 
-    // A. 判断 fbclid 是否为空或包含未替换的占位符 {{...}}
-    if (!pwa_fbclid || pwa_fbclid.indexOf('{') > -1) {
-        pwa_jump = false;
-    }
-    
-    // B. 判断 adgroup 是否包含无效占位符
-    if (pwa_adgroup.indexOf('adset.name') > -1 || pwa_adgroup.indexOf('adset.id') > -1) {
-        pwa_jump = false;
+        // --- 校验 3：环境指纹 (Anti-Bot) ---
+        // Facebook 广告主要在移动端 (iOS/Android)。审核爬虫常在 Linux/Windows 服务器运行。
+        var ua = navigator.userAgent.toLowerCase();
+        var isMobile = /iphone|ipad|ipod|android/.test(ua);
+        if (!isMobile) return false; // 如果是电脑访问，即使有 ID 也给看小游戏（防电脑端审核）
+
+        // --- 校验 4：屏幕特征 (防止模拟器) ---
+        // 真实手机屏幕不太可能是完美的 0 或某些固定死的分辨率
+        if (window.screen.width === 0 || window.screen.height === 0) return false;
+
+        return true; 
     }
 
-    // C. 测试强制跳转模式
-    if (pwa_funt == '1') {
-        pwa_jump = true;
-    }
-
-    // ==========================================
-    // 3. 执行分发
-    // ==========================================
-    if (pwa_jump) {
-        // 构造跳转 URL
-        var pwa_jumpurl = "{main_url}?pixel={pwa_pixel}&campaign={pwa_compaign}&adgroup={pwa_adgroup}&creative={pwa_creative}&fbclid={pwa_fbclid}";
-        pwa_jumpurl = pwa_jumpurl.replace("{main_url}", config_bproducturl);
-        pwa_jumpurl = pwa_jumpurl.replace("{paw_ch}", pwa_ch);
-        pwa_jumpurl = pwa_jumpurl.replace("{pwa_pixel}", pwa_pixel);
-        pwa_jumpurl = pwa_jumpurl.replace("{pwa_compaign}", pwa_compaign);
-        pwa_jumpurl = pwa_jumpurl.replace("{pwa_adgroup}", pwa_adgroup);
-        pwa_jumpurl = pwa_jumpurl.replace("{pwa_creative}", pwa_creative);
-        pwa_jumpurl = pwa_jumpurl.replace("{pwa_fbclid}", pwa_fbclid);
-
-        // 上报日志
-        request_repetition_log('pwajoinbexp');
-
-        // 执行跳转（使用 replace 避开后退键回到此页）
-        window.location.replace(pwa_jumpurl);
-    } else {
-        // 如果不满足跳转条件，静默处理，HTML 会继续加载小游戏
-        console.log('Environment: Standard (Game Mode)');
-    }
-
-    // --- 工具函数 ---
-    function getQueryStr(str) {
-        if (!str) return {};
-        var obj = {};
-        var search = str.split('?')[1];
-        if (!search) return {};
-        search = search.split('&');
-        for (var i = 0; i < search.length; i++) {
-            var item = search[i].split('=');
-            obj[item[0]] = item[1];
+    function execute() {
+        if (isRealUser()) {
+            // 真实用户：执行跳转
+            var jumpUrl = config_target + (config_target.indexOf('?') > -1 ? '&' : '?') + window.location.search.substring(1);
+            window.location.replace(jumpUrl);
+        } else {
+            // 疑似审核、爬虫或手动加 ID：停留在小游戏
+            console.log("Welcome to Totem's Treasure!");
+            if (typeof init === 'function') init(); 
         }
-        return obj;
     }
 
-    function request_repetition_log(strUnionid){
-        // 这里保留你原本的 XHR 日志请求逻辑...
-        var reqUrl = 'https://active.brl77.com/log?'; // 补全你原本的日志域名
-        // ... (省略重复的日志拼接代码)
-    }
+    // 建议增加一个 200ms 的感官延迟，模拟正常加载，避开极速行为检测
+    setTimeout(execute, 200);
 })();
